@@ -1,6 +1,11 @@
 chrome.action.onClicked.addListener(async (tab) => {
     console.log("BonsAI icon clicked! Screenshot preparation...");
 
+    if (tab.url.startsWith("chrome://") || tab.url.startsWith("devtools://") || tab.url === "") {
+        console.warn("BonsAI is resting: cannot run on Chrome system pages.");
+        return;
+    }
+
     try {
         const screenshotUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png"});
 
@@ -12,7 +17,7 @@ chrome.action.onClicked.addListener(async (tab) => {
         const requestBody = {
             model: "llava",
             prompt: "What do you see in this image? Describe it briefly in one sentence.",
-            steam: false,
+            stream: false,
             images: [base64Image]
         };
 
@@ -34,6 +39,11 @@ chrome.action.onClicked.addListener(async (tab) => {
         try {
             const data = JSON.parse(rawText);
             console.log(data.response);
+
+            chrome.tabs.sendMessage(tab.id, {
+                type: "SHOW_AI_RESULT",
+                text: data.response
+            });
         } catch (parseError) {
             const lines = rawText.split('\n').filter(line => line.trim() !== '');
             let fullSentence = "";
@@ -45,6 +55,11 @@ chrome.action.onClicked.addListener(async (tab) => {
                 }
             }
             console.log(fullSentence);
+
+            chrome.tabs.sendMessage(tab.id, {
+                type: "SHOW_AI_RESULT",
+                text: fullSentence
+            });
         }
     } catch (error) {
         console.error("Error during screenshot or AI processing:", error);
