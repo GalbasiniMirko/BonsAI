@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <div class="header">
+    <span class="logo">BonsAI</span>
+    <span id="version" style="font-size: 11px; color: #9ca3af;">v1.0.0</span>
+  </div>
+
+  <button class="btn scan-btn" id="scan-btn">
+    Scan with BonsAI
+  </button>
+
+  <div class="switch-container">
+    <span class="switch-label">Enable BonsAI</span>
+    <label class="switch">
+      <input type="checkbox" id="master-switch">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="switch-container">
+    <span class="switch-label">Enable Network Shield</span>
+    <label class="switch">
+      <input type="checkbox" id="shield-switch">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="whitelist-section">
+    <button class="btn" id="whitelist-btn">Add current site to Whitelist</button>
+    <div class="whitelist-list" id="whitelist-list"></div>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

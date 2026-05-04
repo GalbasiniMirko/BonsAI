@@ -1,89 +1,92 @@
 import { initializeStorage, getSettings } from "../utils/storage_manager.js";
 
+let isScanning = false;
+
 chrome.runtime.onInstalled.addListener(async () => {
     await initializeStorage();
 });
 
-chrome.action.onClicked.addListener(async (tab) => {
-    console.log("BonsAI icon clicked! Reading settings...");
-
-    if (tab.url.startsWith("chrome://") || tab.url.startsWith("devtools://") || tab.url === "") {
-        console.warn("BonsAI is resting: cannot run on Chrome system pages.");
-        return;
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === "START_AI_SCAN") {
+        handleScanProcess(sendResponse);
+        return true; 
     }
+    if (message.type === "GET_SCAN_STATUS") {
+        sendResponse({ isScanning: isScanning });
+    }
+});
 
+async function handleScanProcess(sendResponse) {
+    isScanning = true;
     try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (!tab || tab.url.startsWith("chrome://") || tab.url.startsWith("devtools://") || tab.url === "") {
+            sendResponse({ success: false, reason: "BonsAI cannot scan system pages" });
+            return;
+        }
+
         const settings = await getSettings();
 
         if (!settings.is_enabled) {
-            console.log("BonsAI is currently turned OFF by the Master Switch.");
+            sendResponse({ success: false, reason: "BonsAI is disabled" });
             return;
         }
 
         const urlObj = new URL(tab.url);
         const hostname = urlObj.hostname.replace("www.", "");
-
         if (settings.whitelist.some(domain => hostname.includes(domain))) {
-            console.log(`BonsAI is resting: ${hostname} is in your Whitelist.`);
+            sendResponse({ success: false, reason: `${hostname} is whitelisted` });
             return;
         }
 
-        console.log("Checks passed. Preparing screenshot...");
         const screenshotUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
-
-        console.log("Screenshot successfully captured!");
-        
         const base64Image = screenshotUrl.split(",")[1];
-        console.log(`Sending image to Ollama (${settings.ai_endpoint})... Please wait.`);
-
-        const requestBody = {
-            model: "llava",
-            prompt: "What do you see in this image? Describe it briefly in one sentence.",
-            stream: false,
-            images: [base64Image]
-        };
 
         const response = await fetch(`${settings.ai_endpoint}/api/generate`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model: "llava",
+                prompt: "What do you see in this image? Describe it briefly in one sentence.",
+                stream: false,
+                images: [base64Image]
+            }),
         });
 
-        if (!response.ok) {
-            throw new Error(`Ollama API error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Ollama API error: ${response.status}`);
 
         const rawText = await response.text();
-        console.log("BonsAI Analysis Result:");
-        
+        let fullSentence = "";
+
         try {
             const data = JSON.parse(rawText);
-            console.log(data.response);
-
-            chrome.tabs.sendMessage(tab.id, {
-                type: "SHOW_AI_RESULT",
-                text: data.response
-            });
-        } catch (parseError) {
-            const lines = rawText.split('\n').filter(line => line.trim() !== '');
-            let fullSentence = "";
-
+            fullSentence = data.response;
+        } catch (e) {
+            const lines = rawText.split('\n').filter(l => l.trim() !== '');
             for (const line of lines) {
                 const parsedLine = JSON.parse(line);
-                if (parsedLine.response) {
-                    fullSentence += parsedLine.response;
-                }
+                if (parsedLine.response) fullSentence += parsedLine.response;
             }
-            console.log(fullSentence);
+        }
 
-            chrome.tabs.sendMessage(tab.id, {
+        try {
+            await chrome.tabs.sendMessage(tab.id, {
                 type: "SHOW_AI_RESULT",
                 text: fullSentence
             });
+
+            console.log("Result successfully sent to Content Script");
+        } catch (e) {
+            console.warn("Failed to send message to Content Script. Try refreshing the page.", e.message);
         }
+
+        sendResponse({ success: true });
+
     } catch (error) {
-        console.error("Error during screenshot or AI processing:", error);
+        console.error("Scan error:", error);
+        sendResponse({ success: false, reason: error.message });
+    } finally {
+        isScanning = false;
     }
-})
+}
