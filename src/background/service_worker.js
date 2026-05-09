@@ -21,8 +21,12 @@ async function handleScanProcess(sendResponse) {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
-        if (!tab || tab.url.startsWith("chrome://") || tab.url.startsWith("devtools://") || tab.url === "") {
-            sendResponse({ success: false, reason: "BonsAI cannot scan system pages" });
+        if (!tab || 
+            tab.url.startsWith("chrome://") || 
+            tab.url.startsWith("devtools://") || 
+            tab.url.startsWith("chrome-extension://") ||
+            tab.url === "") {
+            sendResponse({ success: false, reason: "BonsAI cannot scan internal or system pages." });
             return;
         }
 
@@ -47,8 +51,8 @@ async function handleScanProcess(sendResponse) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                model: "llava",
-                prompt: "What do you see in this image? Describe it briefly in one sentence.",
+                model: settings.model_name,
+                prompt: settings.system_prompt,
                 stream: false,
                 images: [base64Image]
             }),

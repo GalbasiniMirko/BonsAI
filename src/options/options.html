@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BonsAI Dashboard</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+<body>
+    <div class="dashboard-wrapper">
+        <div class="dashboard-card">
+            <header>
+                <div class="logo-container">
+                    <span class="logo">BonsAI</span>
+                    <span class="tagline">Configuration Dashboard</span>
+                </div>
+                <span class="version">v1.0.0</span>
+            </header>
+
+            <section class="config-grid">
+                <div class="field-group">
+                    <label for="ai-endpoint">AI API Endpoint</label>
+                    <input type="text" id="ai-endpoint" placeholder="http://localhost:11434">
+                    <small>Default: http://localhost:11434</small>
+                </div>
+
+                <div class="field-group">
+                    <label for="model-name">AI Vision Model</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="model-name">
+                            <option value="">Loading models...</option>
+                        </select>
+                        <button id="refresh-models" type="button" style="padding: 5px 10px; cursor: pointer; background: #374151; color: white; border: 1px solid #4b5563; border-radius: 4px;">Reload</button>
+                    </div>
+                    <small>Select a multimodal model (e.g., qwen2.5-vl, llava).</small>
+                </div>
+
+                <div class="field-group full-width">
+                    <label for="system-prompt">System Instructions (Prompt)</label>
+                    <textarea id="system-prompt" rows="5"></textarea>
+                </div>
+
+                <div class="field-group">
+                    <label for="scan-mode">Default Scan Mode</label>
+                    <select id="scan-mode">
+                        <option value="manual">Manual Only</option>
+                        <option value="on_load">Automatic on Page Load</option>
+                        <option value="on_scroll">Dynamic on Scroll</option>
+                    </select>
+                </div>
+            </section>
+
+            <footer>
+                <div id="status-msg"></div>
+                <button id="save-settings" class="save-btn">Save Configuration</button>
+            </footer>
+        </div>
+    </div>
+    <script type="module" src="options.js"></script>
+</body>
+</html>

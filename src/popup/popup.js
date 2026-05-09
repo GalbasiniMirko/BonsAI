@@ -6,24 +6,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   const whitelistBtn = document.getElementById("whitelist-btn");
   const scanBtn = document.getElementById("scan-btn");
   const whitelistListContainer = document.getElementById("whitelist-list");
+  const optionsBtn = document.getElementById("open-options");
 
   let settings = await getSettings();
   masterSwitch.checked = settings.is_enabled;
   shieldSwitch.checked = settings.is_shield_active;
 
-  const statusResponse = await chrome.runtime.sendMessage({ type: "GET_SCAN_STATUS" });
-  if (statusResponse && statusResponse.isScanning) {
-    scanBtn.innerText = "Scanning...";
-    scanBtn.disabled = true;
-  } else if (!settings.is_enabled) {
-    scanBtn.disabled = true;
-    scanBtn.innerText = "BonsAI is Disabled";
-  }
-
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let currentHostname = "";
-  
+  let isInternalPage = false;
+
   if (tab && tab.url) {
+    isInternalPage = tab.url.startsWith("chrome://") || 
+                     tab.url.startsWith("devtools://") || 
+                     tab.url.startsWith("chrome-extension://");
     try {
       const urlObj = new URL(tab.url);
       currentHostname = urlObj.hostname.replace("www.", "");
@@ -32,30 +28,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  scanBtn.addEventListener("click", async () => {
-    scanBtn.innerText = "Scanning...";
-    scanBtn.disabled = true;
-
-    try {
-      const response = await chrome.runtime.sendMessage({ type: "START_AI_SCAN" });
-      if (response && response.success) {
-        scanBtn.innerText = "Scan Complete!";
-      } else {
-        scanBtn.innerText = "Scan Blocked";
-      }
-    } catch (err) {
-      scanBtn.innerText = "Error";
-    }
-
-    setTimeout(() => {
-      const isEnabled = masterSwitch.checked;
-      scanBtn.disabled = !isEnabled;
-      scanBtn.innerText = isEnabled ? "Scan with BonsAI" : "BonsAI is Disabled";
-    }, 3000);
-  });
-
   function updateWhitelistButton() {
-    if (!currentHostname || tab.url.startsWith("chrome://") || tab.url.startsWith("devtools://")) {
+    if (!currentHostname || isInternalPage) {
       whitelistBtn.disabled = true;
       whitelistBtn.innerText = "Cannot whitelist this page";
       whitelistBtn.style.opacity = "0.5";
@@ -63,17 +37,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const isAlreadyWhitelisted = settings.whitelist.includes(currentHostname);
-
     if (isAlreadyWhitelisted) {
       whitelistBtn.innerText = `- Remove ${currentHostname}`;
       whitelistBtn.style.backgroundColor = "#ef4444";
-      whitelistBtn.style.borderColor = "#f87171";
-      whitelistBtn.style.color = "#ffffff";
     } else {
       whitelistBtn.innerText = `+ Whitelist ${currentHostname}`;
       whitelistBtn.style.backgroundColor = "#374151";
-      whitelistBtn.style.borderColor = "#4b5563";
-      whitelistBtn.style.color = "#f3f4f6";
     }
   }
 
@@ -89,6 +58,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       item.innerHTML = `<span>${site}</span><button class="remove-btn" data-site="${site}">X</button>`;
       whitelistListContainer.appendChild(item);
     });
+
     document.querySelectorAll(".remove-btn").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         const siteToRemove = e.target.getAttribute("data-site");
@@ -100,14 +70,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  const statusResponse = await chrome.runtime.sendMessage({ type: "GET_SCAN_STATUS" });
+  if (statusResponse && statusResponse.isScanning) {
+    scanBtn.innerText = "Scanning...";
+    scanBtn.disabled = true;
+  } else if (!settings.is_enabled) {
+    scanBtn.disabled = true;
+    scanBtn.innerText = "BonsAI is Disabled";
+  } else if (isInternalPage) {
+    scanBtn.disabled = true;
+    scanBtn.innerText = "Cannot scan this page";
+  }
+
   renderWhitelist(settings.whitelist);
   updateWhitelistButton();
 
+  scanBtn.addEventListener("click", async () => {
+    scanBtn.innerText = "Scanning...";
+    scanBtn.disabled = true;
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "START_AI_SCAN" });
+      scanBtn.innerText = (response && response.success) ? "Scan Complete!" : "Scan Blocked";
+    } catch (err) {
+      scanBtn.innerText = "Error";
+    }
+    setTimeout(() => {
+      scanBtn.disabled = !masterSwitch.checked || isInternalPage;
+      scanBtn.innerText = !masterSwitch.checked ? "BonsAI is Disabled" : (isInternalPage ? "Cannot scan this page" : "Scan with BonsAI");
+    }, 3000);
+  });
+
   masterSwitch.addEventListener("change", async () => {
-    const isEnabled = masterSwitch.checked;
-    await updateSettings({ is_enabled: isEnabled });
-    scanBtn.disabled = !isEnabled;
-    scanBtn.innerText = isEnabled ? "Scan with BonsAI" : "BonsAI is Disabled";
+    await updateSettings({ is_enabled: masterSwitch.checked });
+    scanBtn.disabled = !masterSwitch.checked || isInternalPage;
+    scanBtn.innerText = masterSwitch.checked ? (isInternalPage ? "Cannot scan this page" : "Scan with BonsAI") : "BonsAI is Disabled";
   });
 
   shieldSwitch.addEventListener("change", async () => {
@@ -115,7 +111,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   whitelistBtn.addEventListener("click", async () => {
-    if (!currentHostname) return;
+    if (!currentHostname || isInternalPage) return;
     const isAlreadyWhitelisted = settings.whitelist.includes(currentHostname);
     if (isAlreadyWhitelisted) {
       settings.whitelist = settings.whitelist.filter(domain => domain !== currentHostname);
@@ -126,4 +122,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderWhitelist(settings.whitelist);
     updateWhitelistButton();
   });
+
+  if (optionsBtn) {
+    optionsBtn.addEventListener("click", () => {
+      chrome.runtime.openOptionsPage();
+    });
+  }
 });
